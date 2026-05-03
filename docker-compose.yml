@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+
+  # ── MQTT Broker ──────────────────────────────────────────────
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    ports:
+      - '1883:1883'
+      - '9001:9001'
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+    restart: unless-stopped
+
+  # ── Time-series database ─────────────────────────────────────
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - '8086:8086'
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=ufhb2024!
+      - DOCKER_INFLUXDB_INIT_ORG=UFHB-IoT
+      - DOCKER_INFLUXDB_INIT_BUCKET=raw_7d
+      - DOCKER_INFLUXDB_INIT_RETENTION=168h
+    restart: unless-stopped
+
+  # ── MQTT → InfluxDB agent ────────────────────────────────────
+  telegraf:
+    image: telegraf:1.28
+    container_name: telegraf
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      - mosquitto
+      - influxdb
+    restart: unless-stopped
+
+  # ── Dashboard ────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: grafana
+    ports:
+      - '3000:3000'
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=ufhb2024!
+    depends_on:
+      - influxdb
+    restart: unless-stopped
+
+  # ── Document database (TP2) ──────────────────────────────────
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    ports:
+      - '27017:27017'
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=ufhb2024!
+      - MONGO_INITDB_DATABASE=iot_abidjan
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  # ── MongoDB Web UI ───────────────────────────────────────────
+  mongo-express:
+    image: mongo-express:1.0
+    container_name: mongo-express
+    ports:
+      - '8081:8081'
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=ufhb2024!
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:ufhb2024!@mongodb:27017/
+      - ME_CONFIG_BASICAUTH=false
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
